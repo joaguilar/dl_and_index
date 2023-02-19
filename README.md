@@ -10,3 +10,18 @@ The collections are pulled from https://ir.dcs.gla.ac.uk/resources/test_collecti
 Elasticsearch index templates are in the es_templates subfolder.
 
 (WIP)
+
+
+##Environment
+
+```
+conda create --prefix ./dl_and_index python=3.10
+```
+
+```
+conda activate ./dl_and_index
+```
+
+```
+conda deactivate
+```

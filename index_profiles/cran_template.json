@@ -1,0 +1,45 @@
+{
+  "index_patterns": ["cran-*"],
+  "settings": {
+    "number_of_shards": 1
+  },
+  "mappings": {
+    "_source": {
+      "enabled": true
+    },
+    "properties": {
+      "cran_id": {
+        "type": "keyword"
+      },
+      "title": {
+        "type": "text",
+        "copy_to": ["full_text", "main_text"]
+      },
+      "content": {
+        "type": "text",
+        "copy_to": ["full_text", "main_text"]
+      },
+      "bibliography": {
+        "type": "text",
+        "copy_to": ["full_text"]
+      },
+      "author": {
+        "type": "text",
+        "copy_to": ["full_text"]
+      },
+      "full_text": {
+        "type": "text"
+      },
+      "main_text": {
+        "type": "text"
+      }
+    }
+  },
+  "aliases": {
+    "cran": {}
+  },
+  "version": 1,
+  "_meta": {
+    "description": "Index template for cran index documents."
+  }
+}
