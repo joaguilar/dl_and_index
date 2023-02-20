@@ -44,6 +44,7 @@ class CranQueryProcessor(BaseProcessor):
     lines_regexp = {}
     JUDGEMENT_FILE = "data/cran/cranqrel"
     judgement_file = None
+    judgements = {}
 
     def __init__(self):
         super().__init__(self.QUERY_FILE,self.DOC_FILE)
@@ -156,21 +157,55 @@ class CranQueryProcessor(BaseProcessor):
     def getJudgementFile(self):
         return self.judgement_file
 
+
+    def readOneJudgement(self,line):
+        
+        # values = line.split(' ')
+        values = re.split(' +',line)
+        query_id = values[0].replace('\n','')
+        doc_id = values[1].replace('\n','')
+        relevancy = values[2].replace('\n','')
+        return query_id, doc_id, relevancy
+
+
+    ###
+    # Structure to return:
+    # [
+    #     {
+    #         "query_id": {
+    #             "doc_id": "rel",
+    #             "doc_id": "rel",
+    #             ...
+    #         }
+    #     }
+    # ]
+    ###
     def getJudgements(self):
+        self.judgements = {}
         thefile = self.getJudgementFile()
         if not exists(thefile):
             print ("ERROR: file '{}' does not exists.".format(thefile))
             return 
         with open(thefile,'r') as document_reader:
             for line in document_reader.readlines():
+                query_id, doc_id, relevancy = self.readOneJudgement(line)
+                #We only keep relevancy 3 or lower:
+                if int(relevancy) > 3:
+                    continue
+                if query_id in self.judgements.keys():
+                    self.judgements[query_id][doc_id] = relevancy
+                else:
+                    self.judgements[query_id]={doc_id: relevancy}
+                
 
 
 
-        return self.judgments
+        return self.judgements
 
 def main():
-    cran = CranProcessor()
+    cran = CranQueryProcessor()
     print(cran.getAllDocuments())
+    print(cran.getJudgements())
 
 if __name__ == "__main__":
     main()
