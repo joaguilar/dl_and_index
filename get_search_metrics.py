@@ -3,6 +3,7 @@ from elasticsearch import Elasticsearch
 import json
 from statistics import mean 
 import csv
+from math import log2
 
 def initElasticSearch(server, port, https):   
     if https:
@@ -159,6 +160,54 @@ def calculateF1At10(judgements,results):
     avgF1 = mean(f1Acumulator)
     return avgF1
 
+def findDocumentAtN(docs,n):
+    for key in docs:
+        value = docs[key]
+        if value == n:
+            return key
+    return None
+
+def calculateDCGOneQuery(query_id,judgements,results):
+    dcg = 0
+    query_dcg = 0
+    
+    if query_id in results.keys():
+        query_dcg = 0
+        hits = int(len(results[query_id])) # up to 10 results
+        for i in range(0,hits):
+            theDoc = findDocumentAtN(results[query_id],i)
+            #Let's check if this document is relevant to the query:
+            isRelevant = False
+            dcgScore = 0
+            if theDoc in judgements[query_id].keys():
+                isRelevant = True
+                #We need to add one...
+                j = i + 1
+                # print("Judgement: "+str(int(judgements[query_id][theDoc])))
+                # print("log2(j+1): "+str(log2(j+1)))
+                dcgScore = ((int(judgements[query_id][theDoc])))/log2(j+1)
+            else:
+                dcgScore = 0
+            query_dcg += dcgScore
+
+            # print("Result {} is document {}, which is{}relevant to the query, DCG at {} is {}, Total DCG = {}".format(i,theDoc," " if isRelevant else " NOT ",i,dcgScore,query_dcg))
+
+    return query_dcg 
+
+
+def calculateDCGAllQueries(judgements,results):
+    avgDCG = 0
+    DCGAcumulator = []
+    
+    for query_id in judgements.keys():
+        if query_id in results.keys():
+            query_dcg = calculateDCGOneQuery(query_id,judgements,results)
+            DCGAcumulator.append(query_dcg)
+    avgDCG = mean(DCGAcumulator)
+
+    return avgDCG
+
+
 def main():
     #Index cran dataset for now
 
@@ -191,6 +240,11 @@ def main():
     f1 = calculateF1At10(judgements,queries)
     print("Average F1 is {}".format(f1))
     # nDCG = calculateNDCGAt10(judgements,queries)
+    # calculateDCGOneQuery('1',judgements,queries)
+    # calculateDCGOneQuery('200',judgements,queries)
+    # calculateDCGOneQuery('8',judgements,queries)
+    dcg = calculateDCGAllQueries(judgements,queries)    
+    print("Average DCG is {}".format(dcg))
 
 
 
