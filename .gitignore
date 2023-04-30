@@ -132,3 +132,4 @@ dl_and_index/**
 .vscode/**
 .secret
 data/**
+examples/**
