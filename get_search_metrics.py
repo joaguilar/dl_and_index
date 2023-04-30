@@ -12,8 +12,8 @@ def initElasticSearch(server, port, https):
         h = "http://"
     elastic = Elasticsearch(
         hosts=[h+server+":"+str(port)],
-        ssl_assert_fingerprint="",
-        basic_auth=("elastic",""))
+        ssl_assert_fingerprint="4f79db39c521c04becaf33b2fc31683b40a9550b73687b2f0167a620ed24653c",
+        basic_auth=("elastic","itrSC0xrVZh+7F6h-VVp"))
     print(elastic.info())
     return elastic
 
@@ -51,10 +51,54 @@ def runQueries(elastic,queries):
             else:
                 executedQueries[query["id"]]={hit["_id"]: pos}
             pos += 1
+        break
 
-        # print(response["hits"]["hits"])
+    print("Run Queries: "+ json.dumps(executedQueries,indent=4))
+    print(response["hits"]["hits"])
 
     return executedQueries
+
+def runNormOpsQueries(elastic,queries):
+    executedQueries = {}
+    # elastic = Elasticsearch()
+    for query in queries:
+        response = elastic.search(
+            index="cran",
+            query={
+                "match": {
+                    "full_text": {
+                        "query": query["content"]
+                    }
+                }
+            },
+            size=10
+        )
+
+        #We want this:
+            # [
+            #     {
+            #         "query_id": {
+            #             "doc_id": "pos",
+            #             "doc_id": "pos",
+            #             ...
+            #         }
+            #     }
+            # ]
+
+        pos = 0
+        for hit in response["hits"]["hits"]:
+            if query["id"] in executedQueries.keys():
+                executedQueries[query["id"]][hit["_id"]] = pos
+            else:
+                executedQueries[query["id"]]={hit["_id"]: pos}
+            pos += 1
+        break
+
+    print("Run Queries: "+ json.dumps(executedQueries,indent=4))
+    print(response["hits"]["hits"])
+
+    return executedQueries
+
 
 def calculatePrecisionOneQuery(query_id,judgements,results):
     precision = 0
@@ -185,7 +229,7 @@ def calculateDCGOneQuery(query_id,judgements,results):
                 j = i + 1
                 # print("Judgement: "+str(int(judgements[query_id][theDoc])))
                 # print("log2(j+1): "+str(log2(j+1)))
-                dcgScore = ((int(judgements[query_id][theDoc])))/log2(j+1)
+                dcgScore = (2**(int(judgements[query_id][theDoc]))-1)/log2(j+1)
             else:
                 dcgScore = 0
             query_dcg += dcgScore
@@ -194,6 +238,53 @@ def calculateDCGOneQuery(query_id,judgements,results):
 
     return query_dcg 
 
+
+def findDocumentAtI(docs,n):
+    return docs[n][0]
+    
+
+
+
+def calculateIDCGOneQuery(query_id,judgements):
+    query_idcg = 0
+    jugaments_ordenado = sorted(judgements[query_id].items(), key=lambda x: -int(x[1]))
+    if query_id in judgements.keys():
+        query_idcg = 0
+        for i in range(0,10):
+            
+            theDoc = findDocumentAtI(jugaments_ordenado,i)
+            #Let's check if this document is relevant to the query:
+            isRelevant = False
+            idcgScore = 0
+            if theDoc in judgements[query_id].keys():
+                isRelevant = True
+                #We need to add one...
+                j = i + 1
+                
+                idcgScore = (2**(int(judgements[query_id][theDoc]))-1)/log2(j+1)
+            else:
+                idcgScore = 0
+            query_idcg += idcgScore
+
+            
+
+    return query_idcg 
+
+
+def calculateNDCGOneQuery(query_id,judgements,results):
+    return calculateDCGOneQuery(query_id,judgements,results)/calculateIDCGOneQuery(query_id,judgements)
+
+def calculateNDCGAllQueries(judgements,results):
+    avgNDCG = 0
+    NDCGAcumulator = []
+    
+    for query_id in judgements.keys():
+        if query_id in results.keys():
+            query_ndcg = calculateNDCGOneQuery(query_id,judgements,results)
+            NDCGAcumulator.append(query_ndcg)
+    avgNDCG = mean(NDCGAcumulator)
+
+    return avgNDCG
 
 def calculateDCGAllQueries(judgements,results):
     avgDCG = 0
@@ -206,6 +297,18 @@ def calculateDCGAllQueries(judgements,results):
     avgDCG = mean(DCGAcumulator)
 
     return avgDCG
+
+def calculateIDCGAllQueries(judgements,results):
+    avgIDCG = 0
+    IDCGAcumulator = []
+    
+    for query_id in judgements.keys():
+        if query_id in results.keys():
+            query_Idcg = calculateIDCGOneQuery(query_id,judgements)
+            IDCGAcumulator.append(query_Idcg)
+    avgIDCG = mean(IDCGAcumulator)
+
+    return avgIDCG
 
 
 def main():
@@ -231,7 +334,7 @@ def main():
     print("Queries executed with results: {}".format(len(queries)))
 
     print(queries['1'])
-    print(queries['200'])
+#    print(queries['200'])
 
     precision = calculatePrecisionAt10(judgements,queries)
     print("Average Precision is {}".format(precision))
@@ -245,6 +348,13 @@ def main():
     # calculateDCGOneQuery('8',judgements,queries)
     dcg = calculateDCGAllQueries(judgements,queries)    
     print("Average DCG is {}".format(dcg))
+
+    idcg = calculateIDCGAllQueries(judgements,queries)    
+    print("Average IDCG is {}".format(idcg))
+
+    ndcg = calculateNDCGAllQueries(judgements,queries)    
+    print("Average NDCG is {}".format(ndcg))
+
 
 
 

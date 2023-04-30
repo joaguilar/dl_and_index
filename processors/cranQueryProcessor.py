@@ -195,7 +195,7 @@ class CranQueryProcessor(BaseProcessor):
                 #And we turn it around so higher relevancy means better documents - for this we do a 3 - relevancy so it ranks from 4(formerly -1) to 0
                 if relevancy == '-1':
                     relevancy = 1
-                relevancy = str(4-int(relevancy))
+                relevancy = str(5-int(relevancy))
                 if query_id in self.judgements.keys():
                     self.judgements[query_id][doc_id] = relevancy
                 else:
