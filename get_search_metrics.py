@@ -4,6 +4,14 @@ import json
 from statistics import mean 
 import csv
 from math import log2
+import  os
+
+OPERADOR_ELASTIC= "Elastic Default"
+OPERADOR_NORMOPS= "NormOps"
+
+ELASTIC_CSV_FILE = "datosElastic.csv"
+NORMOPS_CSV_FILE = "datosNormOps.csv"
+DATOS_CSV_FILE = "datos.csv"
 
 def initElasticSearch(server, port, https):   
     if https:
@@ -17,10 +25,13 @@ def initElasticSearch(server, port, https):
     print(elastic.info())
     return elastic
 
+queriesElasticTextAcumulator = []
 def runQueries(elastic,queries):
     executedQueries = {}
+    
     # elastic = Elasticsearch()
     for query in queries:
+        queriesElasticTextAcumulator.append(query["content"])
         response = elastic.search(
             index="cran",
             query={
@@ -51,17 +62,20 @@ def runQueries(elastic,queries):
             else:
                 executedQueries[query["id"]]={hit["_id"]: pos}
             pos += 1
-        break
+        
 
     print("Run Queries: "+ json.dumps(executedQueries,indent=4))
     print(response["hits"]["hits"])
 
     return executedQueries
 
+queriesNormOpsTextAcumulator = []
 def runNormOpsQueries(elastic,queries):
     executedQueries = {}
+    
     # elastic = Elasticsearch()
     for query in queries:
+        queriesNormOpsTextAcumulator.append(query["content"])
         response = elastic.search(
             index="cran",
             query={
@@ -116,6 +130,8 @@ def calculatePrecisionOneQuery(query_id,judgements,results):
         return -1
     return precision
 
+
+
 def calculatePrecisionAt10(judgements,results):
     avgPrecision = 0
     precisionAcumulator = []
@@ -139,7 +155,7 @@ def calculatePrecisionAt10(judgements,results):
         precisionAcumulator.append(precision)
 
     avgPrecision = mean(precisionAcumulator)
-    return avgPrecision
+    return avgPrecision,precisionAcumulator
 
 
 def calculateRecallOneQuery(query_id,judgements,results):
@@ -158,6 +174,7 @@ def calculateRecallOneQuery(query_id,judgements,results):
     else:
         return -1
     return recall
+
 
 def calculateRecallAt10(judgements,results):
     avgRecall = 0
@@ -182,7 +199,7 @@ def calculateRecallAt10(judgements,results):
         recallAcumulator.append(recall)
 
     avgRecall = mean(recallAcumulator)
-    return avgRecall
+    return avgRecall,recallAcumulator
 
 
 def calculateF1At10(judgements,results):
@@ -198,11 +215,15 @@ def calculateF1At10(judgements,results):
             p = calculatePrecisionOneQuery(query_id,judgements,results)
             r = calculateRecallOneQuery(query_id,judgements,results)
             if p == 0 and r ==0:
+                f1=0
+                f1Acumulator.append(f1)
                 continue
             f1 = (2*p*r)/(p+r)
             f1Acumulator.append(f1)
+
     avgF1 = mean(f1Acumulator)
-    return avgF1
+    
+    return avgF1,f1Acumulator
 
 def findDocumentAtN(docs,n):
     for key in docs:
@@ -241,16 +262,14 @@ def calculateDCGOneQuery(query_id,judgements,results):
 
 def findDocumentAtI(docs,n):
     return docs[n][0]
-    
-
-
 
 def calculateIDCGOneQuery(query_id,judgements):
     query_idcg = 0
     jugaments_ordenado = sorted(judgements[query_id].items(), key=lambda x: -int(x[1]))
     if query_id in judgements.keys():
         query_idcg = 0
-        for i in range(0,10):
+        hits = 10 if int(len(judgements[query_id])) > 10 else int(len(judgements[query_id]))
+        for i in range(0,hits):
             
             theDoc = findDocumentAtI(jugaments_ordenado,i)
             #Let's check if this document is relevant to the query:
@@ -274,6 +293,7 @@ def calculateIDCGOneQuery(query_id,judgements):
 def calculateNDCGOneQuery(query_id,judgements,results):
     return calculateDCGOneQuery(query_id,judgements,results)/calculateIDCGOneQuery(query_id,judgements)
 
+
 def calculateNDCGAllQueries(judgements,results):
     avgNDCG = 0
     NDCGAcumulator = []
@@ -284,12 +304,13 @@ def calculateNDCGAllQueries(judgements,results):
             NDCGAcumulator.append(query_ndcg)
     avgNDCG = mean(NDCGAcumulator)
 
-    return avgNDCG
+    return avgNDCG,NDCGAcumulator
+
+
 
 def calculateDCGAllQueries(judgements,results):
     avgDCG = 0
     DCGAcumulator = []
-    
     for query_id in judgements.keys():
         if query_id in results.keys():
             query_dcg = calculateDCGOneQuery(query_id,judgements,results)
@@ -297,6 +318,7 @@ def calculateDCGAllQueries(judgements,results):
     avgDCG = mean(DCGAcumulator)
 
     return avgDCG
+
 
 def calculateIDCGAllQueries(judgements,results):
     avgIDCG = 0
@@ -309,6 +331,43 @@ def calculateIDCGAllQueries(judgements,results):
     avgIDCG = mean(IDCGAcumulator)
 
     return avgIDCG
+
+def createCSV(nameFile):
+
+    datos= [ ["Operador","Numero Query", "Query", "Precision","Recall","F1","NDCG","AVG Precision","AVG Recall","AVG F1","AVG NDCG"]]
+
+
+    with open(nameFile, mode="w", newline="") as archivo:
+        escritor = csv.writer(archivo)
+        for fila in datos:
+            escritor.writerow(fila)
+        
+
+def insertRowsCSV(operator,queries,judgements,nameFile):
+    
+    if not os.path.exists(nameFile):
+        createCSV(nameFile)
+    
+    precision=calculatePrecisionAt10(judgements,queries)
+    recall=calculateRecallAt10(judgements,queries)
+    f1=calculateF1At10(judgements,queries)
+    Ndcg=calculateNDCGAllQueries(judgements,queries) 
+
+    for query_id in judgements.keys():
+        if query_id in queries.keys():
+            id=int(query_id)-1
+            print("InserRows Ultimo Query_ID " + str(id))
+            queryText=""
+            queryText= queriesElasticTextAcumulator[id] if operator == OPERADOR_ELASTIC else queriesNormOpsTextAcumulator[id]
+            datosQuery=[operator,query_id,queryText,precision[1][id],recall[1][id],
+                        f1[1][id],Ndcg[1][id],precision[0],recall[0],
+                        f1[0],Ndcg[0]
+                        ]
+            
+            with open(nameFile, mode="a", newline="") as archivo:
+                escritor = csv.writer(archivo)
+                escritor.writerow(datosQuery)
+
 
 
 def main():
@@ -333,27 +392,33 @@ def main():
 
     print("Queries executed with results: {}".format(len(queries)))
 
+
     print(queries['1'])
 #    print(queries['200'])
 
-    precision = calculatePrecisionAt10(judgements,queries)
-    print("Average Precision is {}".format(precision))
-    recall = calculateRecallAt10(judgements,queries)
-    print("Average Recall is {}".format(recall))
-    f1 = calculateF1At10(judgements,queries)
-    print("Average F1 is {}".format(f1))
+    avgPrecision = calculatePrecisionAt10(judgements,queries)[0]
+    print("Average Precision is {}".format(avgPrecision))
+
+    avgRecall = calculateRecallAt10(judgements,queries)[0]
+    print("Average Recall is {}".format(avgRecall))
+
+    avgF1 = calculateF1At10(judgements,queries)[0]
+    print("Average F1 is {}".format(avgF1))
     # nDCG = calculateNDCGAt10(judgements,queries)
     # calculateDCGOneQuery('1',judgements,queries)
     # calculateDCGOneQuery('200',judgements,queries)
     # calculateDCGOneQuery('8',judgements,queries)
-    dcg = calculateDCGAllQueries(judgements,queries)    
-    print("Average DCG is {}".format(dcg))
+    avgDcg = calculateDCGAllQueries(judgements,queries)    
+    print("Average DCG is {}".format(avgDcg))
 
-    idcg = calculateIDCGAllQueries(judgements,queries)    
-    print("Average IDCG is {}".format(idcg))
+    avgIdcg = calculateIDCGAllQueries(judgements,queries)    
+    print("Average IDCG is {}".format(avgIdcg))
 
-    ndcg = calculateNDCGAllQueries(judgements,queries)    
-    print("Average NDCG is {}".format(ndcg))
+    avgNdcg = calculateNDCGAllQueries(judgements,queries)[0]    
+    print("Average NDCG is {}".format(avgNdcg))
+
+    insertRowsCSV(OPERADOR_ELASTIC,queries,judgements,ELASTIC_CSV_FILE)
+    
 
 
 
