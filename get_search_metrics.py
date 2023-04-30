@@ -5,6 +5,8 @@ from statistics import mean
 import csv
 from math import log2
 import  os
+import nltk
+from nltk.tokenize import word_tokenize 
 
 OPERADOR_ELASTIC= "Elastic Default"
 OPERADOR_NORMOPS= "NormOps"
@@ -20,8 +22,8 @@ def initElasticSearch(server, port, https):
         h = "http://"
     elastic = Elasticsearch(
         hosts=[h+server+":"+str(port)],
-        ssl_assert_fingerprint="4f79db39c521c04becaf33b2fc31683b40a9550b73687b2f0167a620ed24653c",
-        basic_auth=("elastic","itrSC0xrVZh+7F6h-VVp"))
+        ssl_assert_fingerprint="TOKEN ELASTIC SEARCH",
+        basic_auth=("elastic","PASSWORD ELASTIC"))
     print(elastic.info())
     return elastic
 
@@ -64,18 +66,21 @@ def runQueries(elastic,queries):
             pos += 1
         
 
-    print("Run Queries: "+ json.dumps(executedQueries,indent=4))
+    #print("Run Queries: "+ json.dumps(executedQueries,indent=4))
     print(response["hits"]["hits"])
 
     return executedQueries
 
 queriesNormOpsTextAcumulator = []
+
 def runNormOpsQueries(elastic,queries):
     executedQueries = {}
     
     # elastic = Elasticsearch()
     for query in queries:
         queriesNormOpsTextAcumulator.append(query["content"])
+        words = word_tokenize(query["content"])
+        print("PUREBA NLTK "+ json.dumps(words,indent=2))
         response = elastic.search(
             index="cran",
             query={
@@ -345,8 +350,10 @@ def createCSV(nameFile):
 
 def insertRowsCSV(operator,queries,judgements,nameFile):
     
-    if not os.path.exists(nameFile):
-        createCSV(nameFile)
+    if  os.path.exists(nameFile):
+        os.remove(nameFile)
+    
+    createCSV(nameFile)
     
     precision=calculatePrecisionAt10(judgements,queries)
     recall=calculateRecallAt10(judgements,queries)
@@ -372,6 +379,8 @@ def insertRowsCSV(operator,queries,judgements,nameFile):
 
 def main():
     #Index cran dataset for now
+
+    nltk.download('punkt')
 
     processor = CranQueryProcessor()
 
