@@ -1,7 +1,18 @@
 {
   "index_patterns": ["cran-*"],
   "settings": {
-    "number_of_shards": 1
+    "number_of_shards": 1,
+    "analysis": {
+      "analyzer": {
+        "cran_stemmed": {
+          "tokenizer": "classic",
+          "filter": [
+            "lowercase",
+            "porter_stem"
+          ]
+        }
+      }
+    }
   },
   "mappings": {
     "_source": {
@@ -28,7 +39,8 @@
         "copy_to": ["full_text"]
       },
       "full_text": {
-        "type": "text"
+        "type": "text",
+        "analyzer":"cran_stemmed"
       },
       "main_text": {
         "type": "text"
