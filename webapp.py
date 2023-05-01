@@ -6,19 +6,13 @@ import json
 from elasticsearch import Elasticsearch
 from nltk.tokenize import sent_tokenize 
 from sentence_transformers import SentenceTransformer
+import os
+import openai
 
 def get_vector(q):
     sentences =[]
     sentences.append(q)
     # print (sentences)
-
-    # api_url = "http://localhost:5000/v1/models/gtr-t5-base/versions/1:predict"
-
-    # body = {
-    #     "data": sentences
-    # }
-    # headers =  {"Content-Type":"application/json"}
-    # response = requests.post(api_url,data=json.dumps(body),headers=headers)
 
     
     model = SentenceTransformer("gtr-t5-base")
@@ -28,37 +22,46 @@ def get_vector(q):
     # result_list = response_dict.get("result")
     # vector = result_list[0]['vector']
     # print(vector)
-    return vector
+    return vector[0]
 
 def query_elastic(index, query, vector):
-    es = Elasticsearch(hosts=["http://localhost:9200"])
+    es = Elasticsearch(hosts=["https://localhost:9200"],
+                        ssl_assert_fingerprint="ec7271bc5116b6c27d595af549090f6176189b20ee64d80a5d2f1de712997ae1",
+                        basic_auth=("elastic","a4JP3X56d3N5vsgUXsR="))
 
     qs = {
-            "script_score": {
             "query": {
                 "match": {
-                "sentence": query
+                "sentence":{
+                        "query": query,
+                        "boost": 0.5
+                        }
                 }
-            },
-            "script": {
-                "source": """
-                double value = doc['sentence-vector'].size() == 0 ? 0 : dotProduct(params.query_vector, 'sentence-vector');
-                return sigmoid(1, Math.E, -value); 
-                """,
-                "params": {"query_vector":vector}}
-                }
+            }
     }  
 
+    knns = {
+                        "field": "sentence-vector",
+                        "k": 5,
+                        "num_candidates": 100,
+                        "query_vector": vector,
+                        "boost":2.0
+    }
+
+    print("AAAA:"+str(vector.tolist()))
     r = es.search(
         index=index,
-        query=qs,
+        # query=qs,
+        knn=knns
     )
 
     return r
 
 def query_elastic_articles(index, query, vector):
-    es = Elasticsearch(hosts=["http://localhost:9200"])
-
+    es = Elasticsearch(hosts=["https://localhost:9200"],
+                        ssl_assert_fingerprint=os.getenv("ssl_assert_fingerprint"),
+                        basic_auth=("elastic",os.getenv("elastic_password"))
+    print("Searching vector:"+str(vector.tolist()))
     qs = {
 
         "has_child": {
@@ -67,21 +70,12 @@ def query_elastic_articles(index, query, vector):
             "query": {
                 "script_score": {
                 "query": {
-                    "match": {
-                    "sentence":{
-                        "query": query,  
-                        "boost":0.1
-                    }
-                    
-                    }
+                    "match_all": {}
                 },
                 "script": {
-                    "source": """
-                        double value = doc['sentence-vector'].size() == 0 ? 0 : dotProduct(params.query_vector, 'sentence-vector');
-                        return sigmoid(1, Math.E, -value); 
-                        """,
+                    "source": "cosineSimilarity(params.queryVector, 'sentence-vector') + 1.0",
                     "params": {
-                    "query_vector": vector
+                    "query_vector": vector.tolist()
                     }
                 }
                 }
@@ -99,7 +93,39 @@ def query_elastic_articles(index, query, vector):
       }
         }        
     }  
+    # qs = {
 
+    #     "has_child": {
+    #         "type": "sentence",
+    #         "score_mode": "max", 
+    #             "query": {
+    #                 "match_all": {}
+                    
+    #                 }
+    #             ,
+    #                 "knns": {
+    #                     "field": "sentence-vector",
+    #                     "k": 5,
+    #                     "num_candidates": 100,
+    #                     "query_vector": vector,
+    #                     "boost":2.0
+    #                 }
+    # }
+    #         , "inner_hits": {
+    #     "_source": ["sentence"], 
+    #     "size": 2, 
+    #     "highlight": {
+    #       "fields": {
+    #         "sentence":{}
+    #       },
+    #       "boundary_scanner": "sentence",
+    #       "pre_tags": [""],
+    #       "post_tags": [""]
+    #     }
+    #   }
+    # }
+                
+    print("Searching on index:"+index)
     r = es.search(
         index=index,
         query=qs,
@@ -120,23 +146,29 @@ def vector_as_text(vector, size):
     vector_text += "]"
     return vector_text
 
+openai.organization = os.getenv("OPENAI_API_ORG")
+openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.Model.list()
+
 st.title('Semantic Search Demo')
 with st.form('query', clear_on_submit=False):
     query = st.text_input('Query', 'What is the air-speed velocity of an unladen swallow?')
     st.markdown("""
         Some example queries:
-        * *do we consider sustainability in every project*?
         * *What is the air-speed velocity of an unladen swallow?*
-        * *why does the compressibility transformation fail to correlate the high speed data for helium and air*
+        * *why does the compressibility transformation fail to correlate the high speed data for helium and air*,
+        * *what chemical kinetic system is applicable to hypersonic aerodynamic problems*
     """)
-    index = st.selectbox("Select Index",('articles-esggtrt5','articles-esg','articles-cran','articles-python'))
+    index = st.selectbox("Select Index",('cranvector-test','cranvector-full'))
     individual_sentences = st.checkbox("Return Individual Sentences?", value=True)
+    generate_answer = st.checkbox("Generate an answer?", value=False)
     submitted = st.form_submit_button(label="Query")
 if not submitted:
     st.stop()
 
 ## Temp:
 test_sentences = sent_tokenize(query,language="english")
+# index = "cranvector-full"
 print("#\t","Sentence")
 for i, s in enumerate(test_sentences):
     print(str(i),"\t",s)
@@ -154,8 +186,9 @@ if individual_sentences:
 else:
     r = query_elastic_articles(index, query, vector)
 
-# st.text(r)
+st.text(r)
 results = []
+context = ""
 if individual_sentences:
     for i,hit in enumerate(r['hits']['hits']):
         result = {}
@@ -163,6 +196,7 @@ if individual_sentences:
         result['Title'] = hit['_source']['title']
         result['Score'] = hit['_score']
         result['sentence'] = hit['_source']['sentence']
+        context = context+" "+result['sentence']
         av = hit['_source']['sentence-vector']
         # print(hit['_source'])
         result['sentence-vector'] = vector_as_text(av,10)
@@ -182,11 +216,43 @@ else:
         content = content.replace(sentence,"<b> *"+sentence+"* </b>")
         # result['Content'] = hit['_source']['content']
         result['Content'] = content
+        context = context+" "+result['Content']
         results.append(result)
+if (generate_answer):
+    the_prompt = "Answer this question as an engineer "+query+" based on "+context[:250]+"."
+    print("PROMPT:||"+the_prompt+"||")
+    # response = openai.Completion.create(
+    #             model="text-davinci-003",
+    #             prompt=the_prompt,
+    #             temperature=0.2,
+    #             max_tokens=80,
+    #             n=1,
+    #             stop=["."],
+                
+    #         )
+    response = openai.ChatCompletion.create(
+        messages=[
+            {"role":"user","content":the_prompt}
+        ],
+        model="gpt-3.5-turbo",
+        temperature=0.2,
+        max_tokens=80,
+        n=1,
+        stop=None #["."]
+    )
+    print(str(response))
+    st.markdown("""---""")
+    st.markdown("# Generated Response")
+    st.markdown(response.choices[0].message.content)
+    st.markdown("""---""")
+# print(results)
+# print(json.dumps(results))
+if (len(results) > 0):
+    df = pd.DataFrame.from_dict(results)
+    st.markdown("## Results")
+    st.table(df)
+    st.markdown("### Results (Raw)")
+    st.text(r)
+else:
+    st.markdown("## No Results")
 
-
-df = pd.DataFrame.from_dict(results)
-st.markdown("## Results")
-st.table(df)
-st.markdown("### Results (Raw)")
-st.text(json.dumps(r,indent=4))
