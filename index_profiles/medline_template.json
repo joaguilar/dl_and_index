@@ -1,0 +1,54 @@
+{
+  "index_patterns": ["medline-*"],
+  "settings": {
+    "number_of_shards": 1,
+    "analysis": {
+      "analyzer": {
+        "cran_stemmed": {
+          "tokenizer": "classic",
+          "filter": [
+            "lowercase",
+            "porter_stem"
+          ]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "_source": {
+      "enabled": true
+    },
+    "properties": {
+      "med_id": {
+        "type": "keyword"
+      },
+      "title": {
+        "type": "text",
+        "copy_to": ["full_text", "main_text"]
+      },
+      "content": {
+        "type": "text",
+        "copy_to": ["full_text", "main_text"]
+      },
+      "bibliography": {
+        "type": "text",
+        "copy_to": ["full_text"]
+      },
+      "author": {
+        "type": "text",
+        "copy_to": ["full_text"]
+      },
+      "full_text": {
+        "type": "text",
+        "analyzer":"cran_stemmed"
+      },
+      "main_text": {
+        "type": "text"
+      }
+    }
+  },
+  "aliases": {
+    "medline": {}
+  },
+  "version": 1
+}

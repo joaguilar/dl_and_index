@@ -133,3 +133,4 @@ dl_and_index/**
 .secret
 data/**
 examples/**
+env.bat
