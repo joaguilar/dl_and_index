@@ -13,8 +13,28 @@ Elasticsearch index templates are in the index_profiles subfolder.
 
 #Running
 
+### Files:
+
+Download the cran and medline collections from (http://ir.dcs.gla.ac.uk/resources/test_collections/)[http://ir.dcs.gla.ac.uk/resources/test_collections/] and paste them in the following directories in the data directory:
+
+- CRAN: data/cran
+- MEDLINE: data/medline
+
 To execute it, have an elasticsearch instance running on your environment.
 Then configure the elasticsearch connection in the following files:
+
+Set the following environment variables:
+
+### ssl_assert_fingerprint
+
+```
+set ssl_assert_fingerprint="<YOUR SSL FINGERPRINT>"
+```
+
+### elastic_password
+```
+set elastic_password="ELASTICSEA="
+```
 
 File: indexers\baseindexer.py
 In the initElasticSearch() method.
