@@ -36,8 +36,8 @@ class BaseIndexer:
             h = "http://"
         self.elastic = Elasticsearch(
             hosts=[h+server+":"+str(port)],
-            ssl_assert_fingerprint="TOKEN ELASTIC SEARCH",
-            basic_auth=("elastic","PASSWORD ELASTIC"))
+            ssl_assert_fingerprint="4f79db39c521c04becaf33b2fc31683b40a9550b73687b2f0167a620ed24653c",
+            basic_auth=("elastic","itrSC0xrVZh+7F6h-VVp"))
         self.elastic.info()
         return
 

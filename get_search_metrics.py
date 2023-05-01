@@ -7,13 +7,46 @@ from math import log2
 import  os
 import nltk
 from nltk.tokenize import word_tokenize 
+from enum import Enum
 
+#Constants
 OPERADOR_ELASTIC= "Elastic Default"
 OPERADOR_NORMOPS= "NormOps"
 
 ELASTIC_CSV_FILE = "datosElastic.csv"
 NORMOPS_CSV_FILE = "datosNormOps.csv"
 DATOS_CSV_FILE = "datos.csv"
+
+class DocDataNorm(Enum):
+    SIGMOID= "SIGMOID"
+    HALF_SIGMOID= "HALF-SIGMOID"
+
+class DocData(Enum):
+    TF = "TF"
+    BM25TF= "BM25TF"
+
+class Weigth(Enum):
+    IDF="IDF"
+    BM25IDF="BM25IDF"
+
+class InputWeigthNorm(Enum):
+    SUM="SUM"
+    MAX ="MAX"
+    MAG="MAG"
+    T_SCORE="T-SCORE"
+    SOFTMAX="SOFTMAX"
+    NONE="NONE"
+
+class Function(Enum):
+    AVG="AVG"
+    PROB="PROB"
+    MAX="MAX"
+    SUM="SUM"
+    MUL="MUL"
+
+
+
+
 
 def initElasticSearch(server, port, https):   
     if https:
@@ -22,8 +55,8 @@ def initElasticSearch(server, port, https):
         h = "http://"
     elastic = Elasticsearch(
         hosts=[h+server+":"+str(port)],
-        ssl_assert_fingerprint="TOKEN ELASTIC SEARCH",
-        basic_auth=("elastic","PASSWORD ELASTIC"))
+        ssl_assert_fingerprint="4f79db39c521c04becaf33b2fc31683b40a9550b73687b2f0167a620ed24653c",
+        basic_auth=("elastic","itrSC0xrVZh+7F6h-VVp"))
     print(elastic.info())
     return elastic
 
@@ -46,17 +79,6 @@ def runQueries(elastic,queries):
             size=10
         )
 
-        #We want this:
-            # [
-            #     {
-            #         "query_id": {
-            #             "doc_id": "pos",
-            #             "doc_id": "pos",
-            #             ...
-            #         }
-            #     }
-            # ]
-
         pos = 0
         for hit in response["hits"]["hits"]:
             if query["id"] in executedQueries.keys():
@@ -71,38 +93,69 @@ def runQueries(elastic,queries):
 
     return executedQueries
 
-queriesNormOpsTextAcumulator = []
 
-def runNormOpsQueries(elastic,queries):
+valuesQueryClauses=[]
+def setvaluesQueryClauses(filedName,idField,docData,docDataNorm,weigth,max,power):
+   valuesQueryClauses.append([filedName,idField,docData,docDataNorm,weigth,str(max),str(power)])
+
+def createClauses(words,filedName,idField,docData,docDataNorm,weigth,max,power):
+
+    clauses=[]
+    #print("PUREBA NLTK "+ json.dumps(words,indent=2))
+    setvaluesQueryClauses(filedName,idField,docData,docDataNorm,weigth,max,power)
+
+    for i in range(0,len(words)-1):
+
+        clauses.append(
+             {
+                "normTerm": {
+                    "fieldName": filedName,
+                    "term": words[i],
+                    "idfField": idField,
+                    "docData": docData,
+                    "docDataNorm": docDataNorm,
+                    "max": str(max),
+                    "weight": weigth,
+                    "power": str(power)
+                }
+
+            }
+        )
+
+    return clauses
+
+valuesQueryNormOps=[]
+def setvaluesQueryNormOps(indexData,normWeight,nomrTreshold,normMinClauses,normInputWeight,normFunction):
+   valuesQueryNormOps.append([indexData,str(normWeight),str(nomrTreshold),str(normMinClauses),normInputWeight,normFunction])
+
+
+queriesNormOpsTextAcumulator = []
+def runNormOpsQueries(elastic,queries,indexData,weight,treshold,minClauses,inputWeigthNorm,function,filedName_clauses,idField_clauses,docData_clauses,docDataNorm_clauses,weigth_clauses,max_clauses,power_clauses):
     executedQueries = {}
+    
     
     # elastic = Elasticsearch()
     for query in queries:
+        setvaluesQueryNormOps(indexData,weight,treshold,minClauses,inputWeigthNorm,function)
         queriesNormOpsTextAcumulator.append(query["content"])
         words = word_tokenize(query["content"])
-        print("PUREBA NLTK "+ json.dumps(words,indent=2))
         response = elastic.search(
-            index="cran",
+            index=indexData,
             query={
-                "match": {
-                    "full_text": {
-                        "query": query["content"]
-                    }
-                }
+                "normOr": {
+                    "weight": weight,
+                    "threshold": treshold,
+                    "minClauses": minClauses,
+                    "inputWeightNorm": inputWeigthNorm,
+                    "function": function,
+                    "clauses": createClauses(words,filedName_clauses,idField_clauses,docData_clauses,docDataNorm_clauses,weigth_clauses,max_clauses,power_clauses)
+
+                }#end normOPs
             },
             size=10
         )
 
-        #We want this:
-            # [
-            #     {
-            #         "query_id": {
-            #             "doc_id": "pos",
-            #             "doc_id": "pos",
-            #             ...
-            #         }
-            #     }
-            # ]
+        
 
         pos = 0
         for hit in response["hits"]["hits"]:
@@ -111,10 +164,10 @@ def runNormOpsQueries(elastic,queries):
             else:
                 executedQueries[query["id"]]={hit["_id"]: pos}
             pos += 1
-        break
+        #break
 
-    print("Run Queries: "+ json.dumps(executedQueries,indent=4))
-    print(response["hits"]["hits"])
+    # print("Run Queries: "+ json.dumps(executedQueries,indent=4))
+    # print(response["hits"]["hits"])
 
     return executedQueries
 
@@ -339,7 +392,9 @@ def calculateIDCGAllQueries(judgements,results):
 
 def createCSV(nameFile):
 
-    datos= [ ["Operador","Numero Query", "Query", "Precision","Recall","F1","NDCG","AVG Precision","AVG Recall","AVG F1","AVG NDCG"]]
+    datos= [ ["Operador","Numero Query", "Query", "Precision","Recall","F1","NDCG","AVG Precision","AVG Recall","AVG F1","AVG NDCG",
+              "IndexData","Weigth_NormOps","Treshold_NormOps","Min Clauses_NormOps","Input WeigthNorm","Function_NormOps",
+              "FieldName_Clauses","IdField_clauses","DocData_clauses","DocDataNorm_clauses","Weigth_clauses","Max_clauses","Power_clauses"]]
 
 
     with open(nameFile, mode="w", newline="") as archivo:
@@ -363,17 +418,31 @@ def insertRowsCSV(operator,queries,judgements,nameFile):
     for query_id in judgements.keys():
         if query_id in queries.keys():
             id=int(query_id)-1
-            print("InserRows Ultimo Query_ID " + str(id))
+            #print("InserRows Ultimo Query_ID " + str(id))
             queryText=""
-            queryText= queriesElasticTextAcumulator[id] if operator == OPERADOR_ELASTIC else queriesNormOpsTextAcumulator[id]
-            datosQuery=[operator,query_id,queryText,precision[1][id],recall[1][id],
-                        f1[1][id],Ndcg[1][id],precision[0],recall[0],
-                        f1[0],Ndcg[0]
-                        ]
-            
-            with open(nameFile, mode="a", newline="") as archivo:
-                escritor = csv.writer(archivo)
-                escritor.writerow(datosQuery)
+            try:
+                queryText= queriesElasticTextAcumulator[id] if operator == OPERADOR_ELASTIC else queriesNormOpsTextAcumulator[id]
+                datosQuery=[operator,query_id,queryText,precision[1][id],recall[1][id],
+                            f1[1][id],Ndcg[1][id],precision[0],recall[0],f1[0],Ndcg[0]
+                            ]
+                
+                if operator == OPERADOR_NORMOPS:
+                    datosExtra=[valuesQueryNormOps[id][0],valuesQueryNormOps[id][1],valuesQueryNormOps[id][2],
+                                valuesQueryNormOps[id][3],valuesQueryNormOps[id][4],valuesQueryNormOps[id][5],
+                                valuesQueryClauses[id][0],valuesQueryClauses[id][1],valuesQueryClauses[id][2],
+                                valuesQueryClauses[id][3],valuesQueryClauses[id][4],valuesQueryClauses[id][5],
+                                valuesQueryClauses[id][6]
+                                ]
+                    for i in range(0,len(datosExtra)):
+                        datosQuery.append(datosExtra[i])
+                
+                with open(nameFile, mode="a", newline="") as archivo:
+                    escritor = csv.writer(archivo)
+                    escritor.writerow(datosQuery)
+
+            except IndexError:
+                print("No encontro valores para la query: "+str(query_id))
+                continue
 
 
 
@@ -397,36 +466,66 @@ def main():
 
     elastic = initElasticSearch("localhost","9200",True)
 
+
     queries = runQueries(elastic,documents)
+    queries_norm = runNormOpsQueries(elastic,documents,"cran",2.0,0.5,5,InputWeigthNorm.SUM.value,Function.AVG.value,"content","content",DocData.TF.value,DocDataNorm.SIGMOID.value,Weigth.IDF.value,5,1)
 
-    print("Queries executed with results: {}".format(len(queries)))
+    
+
+ #   print("Queries executed with results: {}".format(len(queries)))
 
 
-    print(queries['1'])
+#    print(queries['1'])
 #    print(queries['200'])
 
-    avgPrecision = calculatePrecisionAt10(judgements,queries)[0]
-    print("Average Precision is {}".format(avgPrecision))
+    # print("Values Elastic Operator")
 
-    avgRecall = calculateRecallAt10(judgements,queries)[0]
-    print("Average Recall is {}".format(avgRecall))
+    # avgPrecision = calculatePrecisionAt10(judgements,queries)[0]
+    # print("Average Precision is {}".format(avgPrecision))
 
-    avgF1 = calculateF1At10(judgements,queries)[0]
-    print("Average F1 is {}".format(avgF1))
-    # nDCG = calculateNDCGAt10(judgements,queries)
-    # calculateDCGOneQuery('1',judgements,queries)
-    # calculateDCGOneQuery('200',judgements,queries)
-    # calculateDCGOneQuery('8',judgements,queries)
-    avgDcg = calculateDCGAllQueries(judgements,queries)    
-    print("Average DCG is {}".format(avgDcg))
+    # avgRecall = calculateRecallAt10(judgements,queries)[0]
+    # print("Average Recall is {}".format(avgRecall))
 
-    avgIdcg = calculateIDCGAllQueries(judgements,queries)    
-    print("Average IDCG is {}".format(avgIdcg))
+    # avgF1 = calculateF1At10(judgements,queries)[0]
+    # print("Average F1 is {}".format(avgF1))
+    
+    # avgDcg = calculateDCGAllQueries(judgements,queries)    
+    # print("Average DCG is {}".format(avgDcg))
 
-    avgNdcg = calculateNDCGAllQueries(judgements,queries)[0]    
-    print("Average NDCG is {}".format(avgNdcg))
+    # avgIdcg = calculateIDCGAllQueries(judgements,queries)    
+    # print("Average IDCG is {}".format(avgIdcg))
 
+    # avgNdcg = calculateNDCGAllQueries(judgements,queries)[0]    
+    # print("Average NDCG is {}".format(avgNdcg))
+
+    # print("-------------------------------------------------------")
+
+    # print("Values NormOps Operator")
+
+    # avgPrecision = calculatePrecisionAt10(judgements,queries_norm)[0]
+    # print("Average Precision is {}".format(avgPrecision))
+
+    # avgRecall = calculateRecallAt10(judgements,queries_norm)[0]
+    # print("Average Recall is {}".format(avgRecall))
+
+    # avgF1 = calculateF1At10(judgements,queries_norm)[0]
+    # print("Average F1 is {}".format(avgF1))
+    
+    # avgDcg = calculateDCGAllQueries(judgements,queries_norm)    
+    # print("Average DCG is {}".format(avgDcg))
+
+    # avgIdcg = calculateIDCGAllQueries(judgements,queries_norm)    
+    # print("Average IDCG is {}".format(avgIdcg))
+
+    # avgNdcg = calculateNDCGAllQueries(judgements,queries_norm)[0]    
+    # print("Average NDCG is {}".format(avgNdcg))
+
+
+    ##create csv
+    print("Create CSV to "+OPERADOR_ELASTIC)
     insertRowsCSV(OPERADOR_ELASTIC,queries,judgements,ELASTIC_CSV_FILE)
+    print("Create CSV to "+OPERADOR_NORMOPS)
+    insertRowsCSV(OPERADOR_NORMOPS,queries_norm,judgements,NORMOPS_CSV_FILE)
     
 
 
