@@ -1,4 +1,5 @@
 from processors.cranQueryProcessor import CranQueryProcessor
+from processors.medlineQueryProcessor import MedlineQueryProcessor
 from elasticsearch import Elasticsearch
 import json
 from statistics import mean 
@@ -23,19 +24,19 @@ def initElasticSearch(server, port, https):
     elastic = Elasticsearch(
         hosts=[h+server+":"+str(port)],
         ssl_assert_fingerprint=os.environ.get("ssl_assert_fingerprint"),
-        basic_auth=("elastic",os.environ.get("elastic_password"))
+        basic_auth=("elastic",os.environ.get("elastic_password")))
     print(elastic.info())
     return elastic
 
 queriesElasticTextAcumulator = []
-def runQueries(elastic,queries):
+def runQueries(elastic,queries, index):
     executedQueries = {}
     
     # elastic = Elasticsearch()
     for query in queries:
         queriesElasticTextAcumulator.append(query["content"])
         response = elastic.search(
-            index="cran",
+            index=index,
             query={
                 "match": {
                     "full_text": {
@@ -397,7 +398,7 @@ def main():
 
     elastic = initElasticSearch("localhost","9200",True)
 
-    queries = runQueries(elastic,documents)
+    queries = runQueries(elastic,documents,"cran")
 
     print("Queries executed with results: {}".format(len(queries)))
 
@@ -426,9 +427,36 @@ def main():
     avgNdcg = calculateNDCGAllQueries(judgements,queries)[0]    
     print("Average NDCG is {}".format(avgNdcg))
 
-    insertRowsCSV(OPERADOR_ELASTIC,queries,judgements,ELASTIC_CSV_FILE)
+    # insertRowsCSV(OPERADOR_ELASTIC,queries,judgements,ELASTIC_CSV_FILE)
     
 
+    # Medline
+
+    medProcessor =  MedlineQueryProcessor()
+    meddocuments = medProcessor.getAllDocuments()
+    medjudgements = medProcessor.getJudgements()
+    medqueries = runQueries(elastic,meddocuments,"medline")
+    print("Medline Queries executed with results: {}".format(len(medqueries)))
+    print(medqueries['1'])
+    avgPrecision = calculatePrecisionAt10(medjudgements,medqueries)[0]
+    print("Average Precision is {}".format(avgPrecision))
+
+    avgRecall = calculateRecallAt10(medjudgements,medqueries)[0]
+    print("Average Recall is {}".format(avgRecall))
+
+    avgF1 = calculateF1At10(medjudgements,medqueries)[0]
+    print("Average F1 is {}".format(avgF1))
+
+    avgDcg = calculateDCGAllQueries(medjudgements,medqueries)    
+    print("Average DCG is {}".format(avgDcg))
+
+    avgIdcg = calculateIDCGAllQueries(medjudgements,medqueries)    
+    print("Average IDCG is {}".format(avgIdcg))
+
+    avgNdcg = calculateNDCGAllQueries(medjudgements,medqueries)[0]    
+    print("Average NDCG is {}".format(avgNdcg))
+
+    insertRowsCSV(OPERADOR_ELASTIC,medqueries,medjudgements,"medline_results.csv")
 
 
 
