@@ -427,7 +427,7 @@ def main():
     avgNdcg = calculateNDCGAllQueries(judgements,queries)[0]    
     print("Average NDCG is {}".format(avgNdcg))
 
-    # insertRowsCSV(OPERADOR_ELASTIC,queries,judgements,ELASTIC_CSV_FILE)
+    insertRowsCSV(OPERADOR_ELASTIC,queries,judgements,ELASTIC_CSV_FILE)
     
 
     # Medline
