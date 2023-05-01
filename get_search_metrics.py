@@ -10,12 +10,15 @@ import nltk
 from nltk.tokenize import word_tokenize 
 from enum import Enum
 
+
 #Constants
 OPERADOR_ELASTIC= "Elastic Default"
 OPERADOR_NORMOPS= "NormOps"
 
-ELASTIC_CSV_FILE = "datosElastic.csv"
-NORMOPS_CSV_FILE = "datosNormOps.csv"
+ELASTIC_CRAN_CSV_FILE = "datosElastic_cran.csv"
+NORMOPS_CRAN_CSV_FILE = "datosNormOps_cran.csv"
+ELASTIC_MIDLE_CSV_FILE = "datosElastic_medline.csv"
+NORMOPS_MIDLE_CSV_FILE = "datosNormOps_medline.csv"
 DATOS_CSV_FILE = "datos.csv"
 
 class DocDataNorm(Enum):
@@ -197,17 +200,6 @@ def calculatePrecisionAt10(judgements,results):
     precision = 0
 
     for query_id in judgements.keys():
-        # precision = 0
-        # relevant_found = 0 # relevant documents found out of 10
-        # total_found = 0
-        # #Compare which documents were returned in the results dictionary with the relevant ones:
-        # if query_id in results.keys():
-        #     result_docs = results[query_id]
-        #     for doc_id in result_docs.keys():
-        #         if doc_id in judgements[query_id]:
-        #             relevant_found += 1
-        #         total_found += 1 #Number of documents returned
-            # precision = relevant_found / total_found
         precision = calculatePrecisionOneQuery(query_id,judgements,results)
         if precision == -1:
             continue # We don't calculate for queries that are not available
@@ -220,7 +212,6 @@ def calculatePrecisionAt10(judgements,results):
 def calculateRecallOneQuery(query_id,judgements,results):
     recall = 0
     relevant_found = 0 # relevant documents found out of 10
-    total_found = 0
     #Compare which documents were returned in the results dictionary out of the relevant ones:
     if query_id in results.keys():
         total_relevant = min(len(judgements[query_id]),10)
@@ -241,17 +232,6 @@ def calculateRecallAt10(judgements,results):
     
     for query_id in judgements.keys():
         recall = 0
-        relevant_found = 0 # relevant documents found out of 10
-        total_found = 0
-        #Compare which documents were returned in the results dictionary out of the relevant ones:
-        # if query_id in results.keys():
-        #     total_relevant = min(len(judgements[query_id]),10)
-        #     result_docs = results[query_id]
-        #     for doc_id in result_docs.keys():
-        #         if doc_id in judgements[query_id]:
-        #             relevant_found += 1
-                
-        #     recall = relevant_found / total_relevant
         recall = calculateRecallOneQuery(query_id,judgements,results)
         if recall == -1:
             continue
@@ -266,9 +246,7 @@ def calculateF1At10(judgements,results):
     f1Acumulator = []
     
     for query_id in judgements.keys():
-        precision = 0
-        relevant_found = 0 # relevant documents found out of 10
-        total_found = 0
+      
         #Compare which documents were returned in the results dictionary with the relevant ones:
         if query_id in results.keys():
             p = calculatePrecisionOneQuery(query_id,judgements,results)
@@ -451,6 +429,7 @@ def main():
     #Index cran dataset for now
 
     nltk.download('punkt')
+    
 
     processor = CranQueryProcessor()
 
@@ -468,73 +447,75 @@ def main():
     elastic = initElasticSearch("localhost","9200",True)
 
     queries = runQueries(elastic,documents,"cran")
+    queries_norm = runNormOpsQueries(elastic,documents,"cran",2.0,0.5,5,InputWeigthNorm.SUM.value,Function.AVG.value,"content","content",DocData.TF.value,DocDataNorm.SIGMOID.value,Weigth.IDF.value,5,1)
     
+
+    print("Values Elastic Operator in CRAN")
+
+    avgPrecision = calculatePrecisionAt10(judgements,queries)[0]
+    print("Average Precision is {}".format(avgPrecision))
+
+    avgRecall = calculateRecallAt10(judgements,queries)[0]
+    print("Average Recall is {}".format(avgRecall))
+
+    avgF1 = calculateF1At10(judgements,queries)[0]
+    print("Average F1 is {}".format(avgF1))
     
+    avgDcg = calculateDCGAllQueries(judgements,queries)    
+    print("Average DCG is {}".format(avgDcg))
 
- #   print("Queries executed with results: {}".format(len(queries)))
+    avgIdcg = calculateIDCGAllQueries(judgements,queries)    
+    print("Average IDCG is {}".format(avgIdcg))
 
+    avgNdcg = calculateNDCGAllQueries(judgements,queries)[0]    
+    print("Average NDCG is {}".format(avgNdcg))
 
-#    print(queries['1'])
-#    print(queries['200'])
+    print("-------------------------------------------------------")
 
-    # print("Values Elastic Operator")
+    print("Values NormOps Operator in CRAN")
 
-    # avgPrecision = calculatePrecisionAt10(judgements,queries)[0]
-    # print("Average Precision is {}".format(avgPrecision))
+    avgPrecision = calculatePrecisionAt10(judgements,queries_norm)[0]
+    print("Average Precision is {}".format(avgPrecision))
 
-    # avgRecall = calculateRecallAt10(judgements,queries)[0]
-    # print("Average Recall is {}".format(avgRecall))
+    avgRecall = calculateRecallAt10(judgements,queries_norm)[0]
+    print("Average Recall is {}".format(avgRecall))
 
-    # avgF1 = calculateF1At10(judgements,queries)[0]
-    # print("Average F1 is {}".format(avgF1))
+    avgF1 = calculateF1At10(judgements,queries_norm)[0]
+    print("Average F1 is {}".format(avgF1))
     
-    # avgDcg = calculateDCGAllQueries(judgements,queries)    
-    # print("Average DCG is {}".format(avgDcg))
+    avgDcg = calculateDCGAllQueries(judgements,queries_norm)    
+    print("Average DCG is {}".format(avgDcg))
 
-    # avgIdcg = calculateIDCGAllQueries(judgements,queries)    
-    # print("Average IDCG is {}".format(avgIdcg))
+    avgIdcg = calculateIDCGAllQueries(judgements,queries_norm)    
+    print("Average IDCG is {}".format(avgIdcg))
 
-    # avgNdcg = calculateNDCGAllQueries(judgements,queries)[0]    
-    # print("Average NDCG is {}".format(avgNdcg))
-
-    # print("-------------------------------------------------------")
-
-    # print("Values NormOps Operator")
-
-    # avgPrecision = calculatePrecisionAt10(judgements,queries_norm)[0]
-    # print("Average Precision is {}".format(avgPrecision))
-
-    # avgRecall = calculateRecallAt10(judgements,queries_norm)[0]
-    # print("Average Recall is {}".format(avgRecall))
-
-    # avgF1 = calculateF1At10(judgements,queries_norm)[0]
-    # print("Average F1 is {}".format(avgF1))
-    
-    # avgDcg = calculateDCGAllQueries(judgements,queries_norm)    
-    # print("Average DCG is {}".format(avgDcg))
-
-    # avgIdcg = calculateIDCGAllQueries(judgements,queries_norm)    
-    # print("Average IDCG is {}".format(avgIdcg))
-
-    # avgNdcg = calculateNDCGAllQueries(judgements,queries_norm)[0]    
-    # print("Average NDCG is {}".format(avgNdcg))
+    avgNdcg = calculateNDCGAllQueries(judgements,queries_norm)[0]    
+    print("Average NDCG is {}".format(avgNdcg))
 
 
     ##create csv
-    print("Create CSV to "+OPERADOR_ELASTIC)
-    insertRowsCSV(OPERADOR_ELASTIC,queries,judgements,ELASTIC_CSV_FILE)
-    print("Create CSV to "+OPERADOR_NORMOPS)
-    insertRowsCSV(OPERADOR_NORMOPS,queries_norm,judgements,NORMOPS_CSV_FILE)
+    print("Create CSV to CRAN "+OPERADOR_ELASTIC)
+    insertRowsCSV(OPERADOR_ELASTIC,queries,judgements,ELASTIC_CRAN_CSV_FILE)
+    print("Create CSV to CRAN "+OPERADOR_NORMOPS)
+    insertRowsCSV(OPERADOR_NORMOPS,queries_norm,judgements,NORMOPS_CRAN_CSV_FILE)
     
 
     # Medline
 
+    print("-------------------------------------------------------")
+
     medProcessor =  MedlineQueryProcessor()
     meddocuments = medProcessor.getAllDocuments()
     medjudgements = medProcessor.getJudgements()
+
     medqueries = runQueries(elastic,meddocuments,"medline")
+    medqueries_norm=runNormOpsQueries(elastic,meddocuments,"medline",2.0,0.5,5,InputWeigthNorm.SUM.value,Function.AVG.value,"content","content",DocData.TF.value,DocDataNorm.SIGMOID.value,Weigth.IDF.value,5,1)
+
     print("Medline Queries executed with results: {}".format(len(medqueries)))
     print(medqueries['1'])
+
+    print("Values Elastic Operator in Midle")
+
     avgPrecision = calculatePrecisionAt10(medjudgements,medqueries)[0]
     print("Average Precision is {}".format(avgPrecision))
 
@@ -553,7 +534,33 @@ def main():
     avgNdcg = calculateNDCGAllQueries(medjudgements,medqueries)[0]    
     print("Average NDCG is {}".format(avgNdcg))
 
-    insertRowsCSV(OPERADOR_ELASTIC,medqueries,medjudgements,"medline_results.csv")
+    print("-------------------------------------------------------")
+
+    
+    print("Values NormOps in Midle")
+
+    avgPrecision = calculatePrecisionAt10(medjudgements,medqueries_norm)[0]
+    print("Average Precision is {}".format(avgPrecision))
+
+    avgRecall = calculateRecallAt10(medjudgements,medqueries_norm)[0]
+    print("Average Recall is {}".format(avgRecall))
+
+    avgF1 = calculateF1At10(medjudgements,medqueries_norm)[0]
+    print("Average F1 is {}".format(avgF1))
+
+    avgDcg = calculateDCGAllQueries(medjudgements,medqueries_norm)    
+    print("Average DCG is {}".format(avgDcg))
+
+    avgIdcg = calculateIDCGAllQueries(medjudgements,medqueries_norm)    
+    print("Average IDCG is {}".format(avgIdcg))
+
+    avgNdcg = calculateNDCGAllQueries(medjudgements,medqueries_norm)[0]    
+    print("Average NDCG is {}".format(avgNdcg))
+
+    print("Create CSV to Midle "+OPERADOR_ELASTIC)
+    insertRowsCSV(OPERADOR_ELASTIC,medqueries,medjudgements,ELASTIC_MIDLE_CSV_FILE)
+    print("Create CSV to Midle "+OPERADOR_NORMOPS)
+    insertRowsCSV(OPERADOR_NORMOPS,medqueries_norm,medjudgements,NORMOPS_MIDLE_CSV_FILE)
 
 
 

@@ -6,10 +6,9 @@ from indexers.medlineIndexer import MedlineIndexer
 def main():
     #Index cran dataset for now
 
-    # processor = CranProcessor()
-    # indexer = CranIndexer()
-    processor = MedlineProcessor()
-    indexer = MedlineIndexer()
+    processor = CranProcessor()
+    indexer = CranIndexer()
+    
 
     documents = processor.getAllDocuments()
     print ("Loaded {} documents from the Cran collection.".format(len(documents)))
