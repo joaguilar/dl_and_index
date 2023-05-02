@@ -62,8 +62,8 @@ def initElasticSearch(server, port, https):
         h = "http://"
     elastic = Elasticsearch(
         hosts=[h+server+":"+str(port)],
-        ssl_assert_fingerprint="4f79db39c521c04becaf33b2fc31683b40a9550b73687b2f0167a620ed24653c",
-        basic_auth=("elastic","itrSC0xrVZh+7F6h-VVp"))
+        ssl_assert_fingerprint=os.environ.get("ssl_assert_fingerprint"),
+        basic_auth=("elastic",os.environ.get("elastic_password")))
     print(elastic.info())
     return elastic
 
