@@ -38,7 +38,7 @@
 # 1 0 166 1
 # 1 0 167 1
 
-from baseProcessor import BaseProcessor
+from processors.baseProcessor import BaseProcessor
 import re
 from os.path import exists
 
@@ -133,8 +133,8 @@ class TimeQueryProcessor(BaseProcessor):
             for line in document_reader.readlines():
                 fields = line.strip().split()
                 if len(fields) > 0:
-                    key = int(fields[0])
-                    values = {int(v): 4 for v in fields[1:]}
+                    key = str(fields[0])
+                    values = {str(v): 4 for v in fields[1:]}
                     self.judgements[key] = values
 
 
