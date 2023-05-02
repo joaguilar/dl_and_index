@@ -134,3 +134,4 @@ dl_and_index/**
 data/**
 examples/**
 env.bat
+*.csv

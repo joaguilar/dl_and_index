@@ -119,7 +119,7 @@ def createClauses(words,filedName,idField,docData,docDataNorm,weigth,max,power):
              {
                 "normTerm": {
                     "fieldName": filedName,
-                    "term": words[i],
+                    "term": words[i].lower(),
                     "idfField": idField,
                     "docData": docData,
                     "docDataNorm": docDataNorm,
@@ -131,6 +131,7 @@ def createClauses(words,filedName,idField,docData,docDataNorm,weigth,max,power):
             }
         )
 
+    # print(json.dumps(clauses))
     return clauses
 
 valuesQueryNormOps=[]
@@ -455,7 +456,7 @@ def main():
     elastic = initElasticSearch("localhost","9200",True)
 
     queries = runQueries(elastic,documents,"cran")
-    queries_norm = runNormOpsQueries(elastic,documents,"cran",2.0,0.5,5,InputWeigthNorm.SUM.value,Function.AVG.value,"content","content",DocData.TF.value,DocDataNorm.SIGMOID.value,Weigth.IDF.value,5,1)
+    queries_norm = runNormOpsQueries(elastic,documents,"cran",2.0,0.5,5,InputWeigthNorm.SUM.value,Function.AVG.value,"full_text","full_text","BM25TF:k=1;b=0.75","HALF-SIGMOID;s=8","BM25IDF",5,1)
     
     print("------------------CRAN---------------------------")
 
@@ -518,7 +519,7 @@ def main():
     medjudgements = medProcessor.getJudgements()
 
     medqueries = runQueries(elastic,meddocuments,"medline")
-    medqueries_norm=runNormOpsQueries(elastic,meddocuments,"medline",2.0,0.5,5,InputWeigthNorm.SUM.value,Function.AVG.value,"content","content",DocData.TF.value,DocDataNorm.SIGMOID.value,Weigth.IDF.value,5,1)
+    medqueries_norm=runNormOpsQueries(elastic,meddocuments,"medline",2.0,0.5,5,InputWeigthNorm.SUM.value,Function.AVG.value,"full_text","full_text","BM25TF:k=1;b=0.75","HALF-SIGMOID;s=8","BM25IDF",5,1)
 
     print("Medline Queries executed with results: {}".format(len(medqueries)))
     print(medqueries['1'])
@@ -581,7 +582,7 @@ def main():
     timejudgements = timeProcessor.getJudgements()
 
     timequeries = runQueries(elastic,timedocuments,"time")
-    timequeries_norm=runNormOpsQueries(elastic,timedocuments,"time",2.0,0.5,5,InputWeigthNorm.SUM.value,Function.AVG.value,"content","content",DocData.TF.value,DocDataNorm.SIGMOID.value,Weigth.IDF.value,5,1)
+    timequeries_norm=runNormOpsQueries(elastic,timedocuments,"time",2.0,0.5,5,InputWeigthNorm.SUM.value,Function.AVG.value,"full_text","full_text","BM25TF:k=1;b=0.75","HALF-SIGMOID;s=8","BM25IDF",5,1)
 
     print("Time Queries executed with results: {}".format(len(timequeries)))
     print(timequeries['1'])
@@ -609,30 +610,30 @@ def main():
     print("-------------------------------------------------------")
 
     
-    # print("Values NormOps in Time")
+    print("Values NormOps in Time")
 
-    # avgPrecision = calculatePrecisionAt10(timejudgements,timequeries_norm)[0]
-    # print("Average Precision is {}".format(avgPrecision))
+    avgPrecision = calculatePrecisionAt10(timejudgements,timequeries_norm)[0]
+    print("Average Precision is {}".format(avgPrecision))
 
-    # avgRecall = calculateRecallAt10(timejudgements,timequeries_norm)[0]
-    # print("Average Recall is {}".format(avgRecall))
+    avgRecall = calculateRecallAt10(timejudgements,timequeries_norm)[0]
+    print("Average Recall is {}".format(avgRecall))
 
-    # avgF1 = calculateF1At10(timejudgements,timequeries_norm)[0]
-    # print("Average F1 is {}".format(avgF1))
+    avgF1 = calculateF1At10(timejudgements,timequeries_norm)[0]
+    print("Average F1 is {}".format(avgF1))
 
-    # avgDcg = calculateDCGAllQueries(timejudgements,timequeries_norm)    
-    # print("Average DCG is {}".format(avgDcg))
+    avgDcg = calculateDCGAllQueries(timejudgements,timequeries_norm)    
+    print("Average DCG is {}".format(avgDcg))
 
-    # avgIdcg = calculateIDCGAllQueries(timejudgements,timequeries_norm)    
-    # print("Average IDCG is {}".format(avgIdcg))
+    avgIdcg = calculateIDCGAllQueries(timejudgements,timequeries_norm)    
+    print("Average IDCG is {}".format(avgIdcg))
 
-    # avgNdcg = calculateNDCGAllQueries(timejudgements,timequeries_norm)[0]    
-    # print("Average NDCG is {}".format(avgNdcg))
+    avgNdcg = calculateNDCGAllQueries(timejudgements,timequeries_norm)[0]    
+    print("Average NDCG is {}".format(avgNdcg))
 
     print("Create CSV to Time "+OPERADOR_ELASTIC)
     insertRowsCSV(OPERADOR_ELASTIC,timequeries,timejudgements,ELASTIC_TIME_CSV_FILE)
-    # print("Create CSV to Time "+OPERADOR_NORMOPS)
-    # insertRowsCSV(OPERADOR_NORMOPS,timequeries_norm,timejudgements,NORMOPS_TIME_CSV_FILE) 
+    print("Create CSV to Time "+OPERADOR_NORMOPS)
+    insertRowsCSV(OPERADOR_NORMOPS,timequeries_norm,timejudgements,NORMOPS_TIME_CSV_FILE) 
 
 
 
